@@ -9,6 +9,7 @@ Simple shell tool to pull from DockerHub and create an OCI image
 * Untested with registries other than DockerHub
 * No parameter and error handling
 * No documentation
+* Does not extract content of `/dev/`.
 
 ## Dependencies
 

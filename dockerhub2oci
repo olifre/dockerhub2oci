@@ -86,5 +86,5 @@ for HASHLAYER in ${layers_uniq}; do
 done | aria2c -i - -d ${cachedir} --header="Authorization: Bearer ${token}" -V
 
 for HASHLAYER in ${layers}; do
-	tar --overwrite -C ${imgroot} -xf ${cachedir}/${HASHLAYER}.tar.gz
+	tar --overwrite --exclude=dev/* -C ${imgroot} -xf ${cachedir}/${HASHLAYER}.tar.gz
 done
