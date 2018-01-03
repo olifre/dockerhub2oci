@@ -17,7 +17,7 @@ repo="gliderlabs"
 image="alpine"
 tag="latest"
 
-cachedir=/tmp/docker2oci/
+cachedir=${TMPDIR:-/tmp}/docker2oci/
 
 TEMP=$(getopt -o h --long repo:,image:,tag:,help -n $0 -- "$@")
 if [ $? != 0 ] ; then printHelp; exit 1; fi
