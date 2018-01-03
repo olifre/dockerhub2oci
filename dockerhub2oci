@@ -57,7 +57,9 @@ layers=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" | jq 
 # grep -Po '"'"blobSum"'"\s*:\s*"\K([^"]*)')
 #echo "$reply"
 
-for HASHLAYER in ${layers}; do
+layers_uniq=$(echo ${layers} | tr ' ' '\n' | sort | uniq)
+
+for HASHLAYER in ${layers_uniq}; do
 	hashtype=${HASHLAYER%:*}
 	layer=${HASHLAYER#*:}
 	hashtype_aria=$(echo ${hashtype} | sed 's/^\([a-z]*\)\([0-9]*\)$/\1-\2/')
