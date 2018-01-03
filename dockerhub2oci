@@ -1,11 +1,37 @@
 #!/bin/bash
 
+function help() {
+cat <<EOF
+Tool to pull an image from a docker registry and extract the contents
+to a folder to be used as OCI image.
+
+Example usage:
+$0 --repo gliderlabs --image alpine --tag latest
+EOF
+exit 1
+}
+
+# Defaults
 registry="registry.hub.docker.com"
 repo="gliderlabs"
 image="alpine"
 tag="latest"
 
 cachedir=/tmp/docker2oci/
+
+TEMP=$(getopt -o h --long repo:,image:,tag:,help -n $0 -- "$@")
+if [ $? != 0 ] ; then printHelp; exit 1; fi
+eval set -- "$TEMP"
+while true ; do
+	case "$1" in
+		--repo)  repo=$2; shift 2;;
+		--image) image=$2; shift 2;;
+		--tag)   tag=$2; shift 2;;
+		--help)  help; exit 0;;
+		*) echo "Internal error!"; exit 1 ;;
+	esac
+done
+
 mkdir -p ${cachedir}
 
 imgroot=${repo}/${image}/${tag}
