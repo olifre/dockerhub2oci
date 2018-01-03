@@ -28,7 +28,8 @@ while true ; do
 		--image) image=$2; shift 2;;
 		--tag)   tag=$2; shift 2;;
 		--help)  help; exit 0;;
-		*) echo "Internal error!"; exit 1 ;;
+		--) shift; break;;
+		*) echo "Internal error!"; exit 1;;
 	esac
 done
 
