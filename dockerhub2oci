@@ -86,5 +86,33 @@ for HASHLAYER in ${layers_uniq}; do
 done | aria2c -i - -d ${cachedir} --header="Authorization: Bearer ${token}" -V
 
 for HASHLAYER in ${layers}; do
+	# Whiteout handling.
+	whiteouts_unchecked=$(tar tf ${cachedir}/${HASHLAYER}.tar.gz --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
+
+	# Safety: Check for filenames with newline.
+	num_bad_whiteouts=$(echo -n "${whiteouts_unchecked}" | grep -v '.wh.' | wc -l)
+	if [ ! ${num_bad_whiteouts} -eq 0 ]; then
+		echo "There are ${num_bad_whiteouts} whiteout files with newline characters in the filename in layer ${HASHLAYER}:"
+		echo "${whiteouts_unchecked}" | grep -v '.wh.'
+		echo "This is likely malicious content, exiting now!"
+		exit 1
+	fi
+
+	whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0')
+
+	opaque_whiteouts=$(echo -n "${whiteouts}" | grep -ze '\.wh\.\.wh\.\.opq$')
+	explicit_whiteouts=$(echo -n "${whiteouts}" | grep -zve '\.wh\.\.wh\.\.opq$' | grep -ze '\.wh\.[^/]\+$')
+
+	if [ ! -z "${opaque_whiteouts}" ]; then
+		echo "Warning: Layer ${HASHLAYER} contains opaque whiteout files:"
+		echo ${opaque_whiteouts}
+		echo "We do not handle these yet!"
+	fi
+	if [ ! -z "${explicit_whiteouts}" ]; then
+		echo "Warning: Layer ${HASHLAYER} contains explicit whiteout files:"
+		echo ${explicit_whiteouts}
+		echo "We do not handle these yet!"
+	fi
+
 	tar --overwrite --exclude=dev/* -C ${imgroot} -xf ${cachedir}/${HASHLAYER}.tar.gz
 done
