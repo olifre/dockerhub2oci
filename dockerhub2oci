@@ -87,4 +87,6 @@ done | aria2c -i - -d ${cachedir} --header="Authorization: Bearer ${token}" -V
 
 for HASHLAYER in ${layers}; do
 	tar --overwrite --exclude=dev/* -C ${imgroot} -xf ${cachedir}/${HASHLAYER}.tar.gz
+        # make sure all directories are owner-writable
+        find ${imgroot} -type d ! -perm -200|xargs -r chmod u+w
 done
