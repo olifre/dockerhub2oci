@@ -101,19 +101,23 @@ for HASHLAYER in ${layers}; do
 		exit 1
 	fi
 
-	whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0')
+	whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
 
-	opaque_whiteouts=$(echo -n "${whiteouts}" | grep -ze '\.wh\.\.wh\.\.opq$')
-	explicit_whiteouts=$(echo -n "${whiteouts}" | grep -zve '\.wh\.\.wh\.\.opq$' | grep -ze '\.wh\.[^/]\+$')
+	opaque_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -ze '\.wh\.\.wh\.\.opq$' | xxd -p)
+	explicit_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -zve '\.wh\.\.wh\.\.opq$' | grep -ze '\.wh\.[^/]\+$' | xxd -p)
 
 	if [ ! -z "${opaque_whiteouts}" ]; then
 		echo "Warning: Layer ${HASHLAYER} contains opaque whiteout files:"
-		echo ${opaque_whiteouts}
+		while IFS= read -r -d '' whiteout_file; do
+			echo ${whiteout_file}
+		done < <(echo -n "${opaque_whiteouts}" | xxd -p -r)
 		echo "We do not handle these yet!"
 	fi
 	if [ ! -z "${explicit_whiteouts}" ]; then
 		echo "Warning: Layer ${HASHLAYER} contains explicit whiteout files:"
-		echo ${explicit_whiteouts}
+		while IFS= read -r -d '' whiteout_file; do
+			echo ${whiteout_file}
+		done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
 		echo "We do not handle these yet!"
 	fi
 
