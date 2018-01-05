@@ -117,6 +117,17 @@ for HASHLAYER in ${layers}; do
 		echo "Warning: Layer ${HASHLAYER} contains explicit whiteout files:"
 		while IFS= read -r -d '' whiteout_file; do
 			echo "${whiteout_file}"
+			to_be_deleted=${imgroot}/$(echo "${whiteout_file}" | sed 's#\.wh\.\([^/]\+\)$#\1#')
+			# Ensure this is below our tree
+			case $(readlink -f "${to_be_deleted}") in
+				$(readlink -f .)/*)
+					echo "Could safely delete ${to_be_deleted}";;
+				*)
+					echo "ERROR!";
+					echo "File ${to_be_deleted} is not below extracted tree!";
+					echo "This looks malicious, exiting now!";
+					exit 1;;
+			esac
 		done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
 		echo "We do not handle these yet!"
 	fi
