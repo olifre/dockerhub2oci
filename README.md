@@ -5,9 +5,10 @@ Simple shell tool to pull from DockerHub and create an OCI image
 
 ## Known Issues
 
-* No handling of whiteout files
+* No handling of opaque whiteout files (explicit whiteouts are handled)
 * Untested with registries other than DockerHub
-* No parameter and error handling
+* Limited parameter handling
+* No error handling
 * No documentation
 * Does not extract content of `/dev/`.
 
