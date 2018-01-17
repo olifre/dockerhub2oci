@@ -78,8 +78,11 @@ layers_raw=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" |
 #echo "$reply"
 
 layers=$(echo ${layers_raw} | tr ' ' '\n' | tac | uniq)
+# Layers may be strangely stacked and hashes may repeat further up,
+# download only fully unique layer IDs.
+layers_dl=$(echo ${layers_raw} | tr ' ' '\n' | sort | uniq)
 
-for HASHLAYER in ${layers}; do
+for HASHLAYER in ${layers_dl}; do
 	hashtype=${HASHLAYER%:*}
 	layer=${HASHLAYER#*:}
 	hashtype_aria=$(echo ${hashtype} | sed 's/^\([a-z]*\)\([0-9]*\)$/\1-\2/')
