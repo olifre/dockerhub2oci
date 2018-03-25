@@ -37,7 +37,7 @@ cachedir=${TMPDIR:-/tmp}/docker2oci/
 
 writable_dirs=false
 
-TEMP=$(getopt -o h --long repo:,image:,tag:,writable-dirs,help -n $0 -- "$@")
+TEMP=$(getopt -o h --long repo:,image:,tag:,registry:,writable-dirs,help -n $0 -- "$@")
 if [ $? != 0 ] ; then printHelp; exit 1; fi
 eval set -- "$TEMP"
 while true ; do
@@ -46,6 +46,7 @@ while true ; do
 		--image)         image=$2;           shift 2;;
 		--tag)           tag=$2;             shift 2;;
 		--cachedir)      cachedir=$2;        shift 2;;
+		--registry)      registry=$2;        shift 2;;
 		--writable-dirs) writable_dirs=true; shift 1;;
 		-h|--help)       help;               exit 0;;
 		--)              shift;              break;;
