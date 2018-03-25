@@ -43,6 +43,7 @@ eval set -- "$TEMP"
 while true ; do
 	case "$1" in
 		--repo)          repo=$2;            shift 2;;
+                --registry)      registry=$2;        shift 2;;
 		--image)         image=$2;           shift 2;;
 		--tag)           tag=$2;             shift 2;;
 		--cachedir)      cachedir=$2;        shift 2;;
@@ -61,8 +62,15 @@ mkdir -p ${imgroot}
 
 img_full="${repo}/${image}"
 
-auth_uri="https://auth.docker.io/token"
-auth_uri_full="${auth_uri}?service=registry.docker.io&scope=repository:${img_full}:pull"
+# Support for nvidia or other (Docker Hub)
+
+if [ "${registry}" == "nvcr.io" ]; then
+    auth_uri="https://authn.nvidia.com/token"
+    auth_uri_full="${auth_uri}?service=registry&scope=repository:${img_full}:pull"
+else
+    auth_uri="https://auth.docker.io/token"
+    auth_uri_full="${auth_uri}?service=registry.docker.io&scope=repository:${img_full}:pull"
+fi
 
 reg_uri_manifest="https://${registry}/v2/${img_full}/manifests/${tag}"
 reg_uri_blobs="https://${registry}/v2/${img_full}/blobs"
@@ -137,3 +145,4 @@ for HASHLAYER in ${layers}; do
 		find ${imgroot} -type d ! -perm -200 -print0|xargs -0 -r chmod u+w
 	fi
 done
+
