@@ -10,7 +10,7 @@ Please take note of the projects design goals:
 
 Also, please mind the pull request template, which states:
 ```
-I agree that my changes can be licensed under GPL 3.
+I agree that my changes can be licensed under Apache License 2.0.
 ```
 Please keep this line in for your first contribution. 
 
