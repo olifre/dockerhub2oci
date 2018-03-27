@@ -6,64 +6,29 @@
 # Contributors
 #  - Vanessa Sochat
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
 
-function help() {
-cat <<EOF
-Tool to extract a layer to a folder of interest, handling whiteout files.
+################################################################################
+# Functions
 
-Example usage:
-$0 --layer /path/to/file.tar.gz --extract /extract/here
-EOF
-exit 1
-}
+function check_bad_whiteouts() {
 
-writable_dirs=false
-
-TEMP=$(getopt -o h --long layer:,extract:,help -n $0 -- "$@")
-if [ $? != 0 ] ; then printHelp; exit 1; fi
-eval set -- "$TEMP"
-while true ; do
-	case "$1" in
-		--layer)         layer=$2;           shift 2;;
-                --extract)       extract=$2;         shift 2;;
-		--writable-dirs) writable_dirs=true; shift 1;;
-		-h|--help)       help;               exit 0;;
-		--)              shift;              break;;
-		*) echo "Internal error!";           exit 1;;
-	esac
-done
-
-
-# Checks
-
-if [ ! -f "${layer}" ]; then
-    echo "Cannot find ${layer}"
-    exit 1
-fi
-
-if [ ! -d "${extract}" ]; then
-    echo "Cannot find directory ${extract} to extract."
-    exit 1
-
-else
-
-    # Whiteout handling.
+    # Look for newline characters in whiteouts, exit if found
+    layer="$1"
 
     whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
 
-    # Safety: Check for filenames with newline.
     num_bad_whiteouts=$(echo -n "${whiteouts_unchecked}" | grep -v '.wh.' | wc -l)
     if [ ! ${num_bad_whiteouts} -eq 0 ]; then
         echo "There are ${num_bad_whiteouts} whiteout files with newline characters in the filename in layer ${layer}:"
@@ -72,36 +37,140 @@ else
         exit 1
     fi
 
+}
+
+function check_opaque_whiteouts() {
+
+    # Return 1 if has opaque, 0 otherwise
+    has_opaque=0
+    layer="$1"
+
+    whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
     whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
     opaque_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -ze '\.wh\.\.wh\.\.opq$' | xxd -p)
-    explicit_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -zve '\.wh\.\.wh\.\.opq$' | grep -ze '\.wh\.[^/]\+$' | xxd -p)
 
-    # Opaque Whiteouts
     if [ ! -z "${opaque_whiteouts}" ]; then
+        has_opaque=1
         echo "Warning: Layer ${layer} contains opaque whiteout files:"
         while IFS= read -r -d '' whiteout_file; do
-	    echo "${whiteout_file}"
-	done < <(echo -n "${opaque_whiteouts}" | xxd -p -r)
+        echo "${whiteout_file}"
+    done < <(echo -n "${opaque_whiteouts}" | xxd -p -r)
         echo "We do not handle these yet!"
     fi
 
-    # Explicit Whiteouts
+    return $has_opaque
+}
+
+
+function remove_explicit_whiteouts() {
+
+    layer="$1"
+
+    whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
+    whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
+    explicit_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -zve '\.wh\.\.wh\.\.opq$' | grep -ze '\.wh\.[^/]\+$' | xxd -p)
+
     if [ ! -z "${explicit_whiteouts}" ]; then
         while IFS= read -r -d '' whiteout_file; do
             to_be_deleted=${extract}/$(echo "${whiteout_file}" | sed 's#\.wh\.\([^/]\+\)$#\1#')
             # Ensure this is below our tree
-            case $(readlink -f "${to_be_deleted}") in $(readlink -f .)/*)
-                rm -rf "${to_be_deleted}";;
-            *)
-                echo "WARNING!";
-                echo "File ${to_be_deleted} is not below extracted tree, skipping!";
-             esac
-         done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
-    fi 
+            location=$(readlink -f "${to_be_deleted}")
+            case "${location}" in 
+                 # Does being a link imply not below tree?
+                 $(readlink -f .)/*)
+                     rm -rf "${to_be_deleted}";;
+                 *)
+                     echo "WARNING!";
+                     echo "File ${to_be_deleted} is a link (not below extracted tree) skipping!";
+                 esac
+             done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
+        fi 
+}
+
+function handle_whiteouts() {
+
+    # Layer and extract folder required
+
+    if [ "$#" -ne 2 ]; then
+        help;
+        exit 1;
+    fi
+
+    layer="${1}"
+    extract="${2}"
+
+    # Checks
+
+    if [ ! -f "${layer}" ]; then
+        echo "Cannot find ${layer}"
+        exit 1
+    fi
+
+    if [ ! -d "${extract}" ]; then
+        echo "Cannot find directory ${extract} to extract."
+        exit 1
+    fi
+
+
+    # Whiteout handling.
+
+    check_bad_whiteouts "${layer}"
+    check_opaque_whiteouts "${layer}"
+    remove_explicit_whiteouts "${layer}"
+
     tar --overwrite --exclude=dev/* --exclude=*/.wh.* -C ${extract} -xf ${layer}
 
+}
+
+
+################################################################################
+# Main
+
+
+function run_handle_whiteouts() {
+
+    function help() {
+    cat <<EOF
+Tool to extract a layer to a folder of interest, handling whiteout files.
+
+Example usage:
+$0 --layer /path/to/file.tar.gz --extract /extract/here
+EOF
+exit 1
+}
+
+    writable_dirs=false
+
+    # Argument Parsing
+
+    TEMP=$(getopt -o h --long layer:,extract:,help -n $0 -- "$@")
+    if [ $? != 0 ] ; then printHelp; exit 1; fi
+    eval set -- "$TEMP"
+    while true ; do
+        case "$1" in
+            --layer)         layer=$2;           shift 2;;
+            --extract)       extract=$2;         shift 2;;
+            --writable-dirs) writable_dirs=true; shift 1;;
+            -h|--help)       help;               exit 0;;
+            --)              shift;              break;;
+            *) echo "Internal error!";           exit 1;;
+        esac
+    done
+
+    # Main
+
+    handle_whiteouts "${layer}" "${extract}"
+
     # Make directories owner-writable?
+
     if ${writable_dirs}; then
         find ${extract} -type d ! -perm -200 -print0|xargs -0 -r chmod u+w
     fi
+
+}
+
+# If the script has arguments, not being sourced
+
+if [ "$#" -ne 0 ]; then
+    run_handle_whiteouts "$@"
 fi
