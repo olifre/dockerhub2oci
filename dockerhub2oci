@@ -42,7 +42,7 @@ if [ $? != 0 ] ; then printHelp; exit 1; fi
 eval set -- "$TEMP"
 while true ; do
 	case "$1" in
-		--repo)          repo=$2;            shift 2;;
+        	--repo)          repo=$2;            shift 2;;
                 --registry)      registry=$2;        shift 2;;
 		--image)         image=$2;           shift 2;;
 		--tag)           tag=$2;             shift 2;;
