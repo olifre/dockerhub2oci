@@ -22,70 +22,6 @@
 ################################################################################
 # Functions
 
-function check_bad_whiteouts() {
-
-    # Look for newline characters in whiteouts, exit if found
-    layer="$1"
-
-    whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
-
-    num_bad_whiteouts=$(echo -n "${whiteouts_unchecked}" | grep -v '.wh.' | wc -l)
-    if [ ! ${num_bad_whiteouts} -eq 0 ]; then
-        echo "There are ${num_bad_whiteouts} whiteout files with newline characters in the filename in layer ${layer}:"
-        echo "${whiteouts_unchecked}" | grep -v '.wh.'
-        echo "This is likely malicious content, exiting now!"
-        exit 1
-    fi
-
-}
-
-function check_opaque_whiteouts() {
-
-    # Return 1 if has opaque, 0 otherwise
-    has_opaque=0
-    layer="$1"
-
-    whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
-    whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
-    opaque_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -ze '\.wh\.\.wh\.\.opq$' | xxd -p)
-
-    if [ ! -z "${opaque_whiteouts}" ]; then
-        has_opaque=1
-        echo "Warning: Layer ${layer} contains opaque whiteout files:"
-        while IFS= read -r -d '' whiteout_file; do
-        echo "${whiteout_file}"
-    done < <(echo -n "${opaque_whiteouts}" | xxd -p -r)
-        echo "We do not handle these yet!"
-    fi
-
-    return $has_opaque
-}
-
-
-function remove_explicit_whiteouts() {
-
-    layer="$1"
-
-    whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
-    whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
-    explicit_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -zve '\.wh\.\.wh\.\.opq$' | grep -ze '\.wh\.[^/]\+$' | xxd -p)
-
-    if [ ! -z "${explicit_whiteouts}" ]; then
-        while IFS= read -r -d '' whiteout_file; do
-            to_be_deleted=${extract}/$(echo "${whiteout_file}" | sed 's#\.wh\.\([^/]\+\)$#\1#')
-            # Ensure this is below our tree
-            location=$(readlink -f "${to_be_deleted}")
-            case "${location}" in 
-                 # Does being a link imply not below tree?
-                 $(readlink -f .)/*)
-                     rm -rf "${to_be_deleted}";;
-                 *)
-                     echo "WARNING!";
-                     echo "File ${to_be_deleted} is a link (not below extracted tree) skipping!";
-                 esac
-             done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
-        fi 
-}
 
 function handle_whiteouts() {
 
@@ -114,9 +50,48 @@ function handle_whiteouts() {
 
     # Whiteout handling.
 
-    check_bad_whiteouts "${layer}"
-    check_opaque_whiteouts "${layer}"
-    remove_explicit_whiteouts "${layer}"
+    whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
+    whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
+
+    num_bad_whiteouts=$(echo -n "${whiteouts_unchecked}" | grep -v '.wh.' | wc -l)
+    if [ ! ${num_bad_whiteouts} -eq 0 ]; then
+        echo "There are ${num_bad_whiteouts} whiteout files with newline characters in the filename in layer ${layer}:"
+        echo "${whiteouts_unchecked}" | grep -v '.wh.'
+        echo "This is likely malicious content, exiting now!"
+        exit 1
+    fi
+
+    # Opaque Whiteouts
+
+    opaque_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -ze '\.wh\.\.wh\.\.opq$' | xxd -p)
+
+    if [ ! -z "${opaque_whiteouts}" ]; then
+        echo "Warning: Layer ${layer} contains opaque whiteout files:"
+        while IFS= read -r -d '' whiteout_file; do
+        echo "${whiteout_file}"
+    done < <(echo -n "${opaque_whiteouts}" | xxd -p -r)
+        echo "We do not handle these yet!"
+    fi
+
+    # Explicit Whiteouts
+
+    explicit_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -zve '\.wh\.\.wh\.\.opq$' | grep -ze '\.wh\.[^/]\+$' | xxd -p)
+
+    if [ ! -z "${explicit_whiteouts}" ]; then
+        while IFS= read -r -d '' whiteout_file; do
+            to_be_deleted=${extract}/$(echo "${whiteout_file}" | sed 's#\.wh\.\([^/]\+\)$#\1#')
+            # Ensure this is below our tree
+            location=$(readlink -f "${to_be_deleted}")
+            case "${location}" in 
+                 # Does being a link imply not below tree?
+                 $(readlink -f .)/*)
+                     rm -rf "${to_be_deleted}";;
+                 *)
+                     echo "WARNING!";
+                     echo "File ${to_be_deleted} is a link (not below extracted tree) skipping!";
+                 esac
+             done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
+        fi 
 
     tar --overwrite --exclude=dev/* --exclude=*/.wh.* -C ${extract} -xf ${layer}
 
