@@ -84,22 +84,25 @@ function handle_whiteouts() {
         while IFS= read -r -d '' whiteout_file; do
             to_be_deleted=${extract}/$(echo "${whiteout_file}" | sed 's#\.wh\.\([^/]\+\)$#\1#')
 
-            # Where is the file linking to?
+            # If the directory was already deleted, the file won't exist
+            if [ -e "$to_be_deleted" ]; then
 
-            location=$(readlink -f "${to_be_deleted}")
+                # Where is the file linking to?
 
-            echo "file:$to_be_deleted --> location:$location";
+                location=$(readlink -f "${to_be_deleted}")
 
-            # If the link isn't within the extraction tree, remove
+                echo "file:$to_be_deleted --> location:$location";
 
-            if [[ ${location} ==  ${extract}* ]]; then
-                 echo "File ${to_be_deleted} is in tree, safe to delete.";
-                 rm -rf "${to_be_deleted}";
+                # If the link isn't within the extraction tree, remove
 
-            # Otherwise, could have malicious intent
+                if [[ ${location} ==  ${extract}* ]]; then
+                     rm -rf "${to_be_deleted}";
 
-            else
-                 echo "WARNING: File ${to_be_deleted} links outside of tree. Will not be deleted.";
+                # Otherwise, could have malicious intent
+
+                else
+                     echo "WARNING: File ${to_be_deleted} links outside of tree. Will not be deleted.";
+                fi
             fi
 
         done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
