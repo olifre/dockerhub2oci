@@ -51,7 +51,8 @@ function handle_whiteouts() {
     # Whiteout handling.
 
     whiteouts_unchecked=$(tar tf ${layer} --wildcards --wildcards-match-slash ".wh..wh..opq" "*/.wh..wh..opq" ".wh.*" "*/.wh.*" 2>/dev/null)
-    whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
+
+    # Checking for whiteouts with newline
 
     num_bad_whiteouts=$(echo -n "${whiteouts_unchecked}" | grep -v '.wh.' | wc -l)
     if [ ! ${num_bad_whiteouts} -eq 0 ]; then
@@ -61,9 +62,11 @@ function handle_whiteouts() {
         exit 1
     fi
 
+    whiteouts=$(echo "${whiteouts_unchecked}" | tr '\n' '\0' | xxd -p)
+
     # Opaque Whiteouts
 
-    opaque_whiteouts=$(echo -n "${whiteouts}" | xxd -p -r | grep -ze '\.wh\.\.wh\.\.opq$' | xxd -p)
+    opaque_whiteouts=$(echo -n "${whiteouts_unchecked}" | xxd -p -r | grep -ze '\.wh\.\.wh\.\.opq$' | xxd -p)
 
     if [ ! -z "${opaque_whiteouts}" ]; then
         echo "Warning: Layer ${layer} contains opaque whiteout files:"
@@ -80,18 +83,26 @@ function handle_whiteouts() {
     if [ ! -z "${explicit_whiteouts}" ]; then
         while IFS= read -r -d '' whiteout_file; do
             to_be_deleted=${extract}/$(echo "${whiteout_file}" | sed 's#\.wh\.\([^/]\+\)$#\1#')
-            # Ensure this is below our tree
+
+            # Where is the file linking to?
+
             location=$(readlink -f "${to_be_deleted}")
-            case "${location}" in 
-                 # Does being a link imply not below tree?
-                 $(readlink -f .)/*)
-                     rm -rf "${to_be_deleted}";;
-                 *)
-                     echo "WARNING!";
-                     echo "File ${to_be_deleted} is a link (not below extracted tree) skipping!";
-                 esac
-             done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
-        fi 
+
+
+            # If the link isn't within the extraction tree, remove
+
+            if [[ ${location} ==  ${extract}* ]]; then
+                 echo "File ${to_be_deleted} is in tree, safe to delete."
+                 rm -rf "${to_be_deleted}";;
+
+            # Otherwise, could have malicious intent
+
+            else
+                 echo "WARNING: File ${to_be_deleted} links outside of tree. Will not be deleted."
+            fi
+
+        done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
+    fi 
 
     tar --overwrite --exclude=dev/* --exclude=*/.wh.* -C ${extract} -xf ${layer}
 
@@ -148,4 +159,6 @@ exit 1
 
 if [ "$#" -ne 0 ]; then
     run_handle_whiteouts "$@"
+else
+    exec $0 --help
 fi
