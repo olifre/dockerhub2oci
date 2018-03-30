@@ -88,6 +88,7 @@ function handle_whiteouts() {
 
             location=$(readlink -f "${to_be_deleted}")
 
+            echo "file:$to_be_deleted --> location:$location";
 
             # If the link isn't within the extraction tree, remove
 
