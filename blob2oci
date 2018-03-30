@@ -92,13 +92,13 @@ function handle_whiteouts() {
             # If the link isn't within the extraction tree, remove
 
             if [[ ${location} ==  ${extract}* ]]; then
-                 echo "File ${to_be_deleted} is in tree, safe to delete."
-                 rm -rf "${to_be_deleted}";;
+                 echo "File ${to_be_deleted} is in tree, safe to delete.";
+                 rm -rf "${to_be_deleted}";
 
             # Otherwise, could have malicious intent
 
             else
-                 echo "WARNING: File ${to_be_deleted} links outside of tree. Will not be deleted."
+                 echo "WARNING: File ${to_be_deleted} links outside of tree. Will not be deleted.";
             fi
 
         done < <(echo -n "${explicit_whiteouts}" | xxd -p -r)
