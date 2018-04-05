@@ -23,7 +23,7 @@ Tool to pull an image from an Nvidia Cloud registry and extract the contents
 to a folder to be used as OCI image.
 
 Example usage:
-$0 --repo tensorflow --image tensorflow --tag 17.10 --token $token
+$0 --repo tensorflow --image tensorflow --tag 17.10 --oauthtoken $token
 EOF
 exit 1
 }
@@ -41,42 +41,39 @@ fi
 
 registry="nvcr.io"
 repo="nvidia"
-token="unset"
+oauthtoken="unset"
 image="tensorflow"
 tag="17.10"
+cmd=""
 
 cachedir=${TMPDIR:-/tmp}/ngc2oci/
 
 writable_dirs=false
-cmd="--registry nvcr.io"
 
-TEMP=$(getopt -o h --long repo:,image:,tag:,token:,cachedir:,writable-dirs,help -n $0 -- "$@")
-if [ $? != 0 ] ; then printHelp; exit 1; fi
+TEMP=$(getopt -o h --long repo:,image:,tag:,oauthtoken:,cachedir:,writable-dirs,help -n $0 -- "$@")
+if [ $? != 0 ] ; then usage; exit 1; fi
 eval set -- "$TEMP"
 while true ; do
 	case "$1" in
 		--repo)          
                       repo=$2;            
                       shift 2;
-                      cmd="$cmd --repo $repo";
                 ;;
 		--image)         
                       image=$2;           
                       shift 2;
-                      cmd="$cmd --image $image";
                 ;;
 		--tag)           
                       tag=$2;             
                       shift 2;
-                      cmd="$cmd --tag $tag";
                 ;;
 		--cachedir)      
                       cachedir=$2;
                       shift 2;
                       cmd="$cmd --cachedir $cachedir";
                 ;;
-		--token)         
-                      token=$2;           
+		--oauthtoken)   
+                      oauthtoken=$2;           
                       shift 2;
                 ;;
 		--writable-dirs) 
@@ -90,26 +87,25 @@ while true ; do
 	esac
 done
 
+# Put command together to pass on to dockerhub2oci
+cmd="--registry nvcr.io $cmd --repo $repo --image $image --tag $tag";
+
 img_full="${repo}/${image}"
 auth_uri="https://authn.nvidia.com/token"
 auth_uri_full="${auth_uri}?service=registry&expires_in=900&scope=repository:${img_full}:pull"
 
 # If nvidia is desired, a --token is required!
-if [ "${token}" == "unset" ]; then
+if [ "${oauthtoken}" == "unset" ]; then
     echo "You must provide an Nvidia Cloud token with --token"
     exit 1
 fi
 
 # The nvidia cloud token still needs to be converted to base64
 
-token="$(echo -n "\$oauthtoken:$token" | base64)" | tr -d " "
+token=$(echo -n "\$oauthtoken:$oauthtoken" | base64 -w 0 | tr -d " ")
 token=$(curl -s -H "Authorization: Basic ${token}" -H "Content-Type: application/json; charset=utf-8" -H "Accept: application/json" ${auth_uri_full} | jq -r .token)
-echo $token
-
-# response I'm getting
-# {"timestamp":1522964755796,"status":401,"error":"Unauthorized","message":"Unauthorized","path":"/token"}
-
-echo "exec ${HERE}/dockerhub2oci --token ${token} $cmd"
 
 # Then call dockerhub2oci
-#exec "${HERE}/dockerhub2oci" --token ${token} $cmd
+echo $cmd
+export DOCKERHUB2OCI_TOKEN=$token
+exec ${HERE}/dockerhub2oci $cmd

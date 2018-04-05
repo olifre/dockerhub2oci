@@ -62,8 +62,14 @@ cachedir=${TMPDIR:-/tmp}/docker2oci/
 
 writable_dirs=false
 
-TEMP=$(getopt -o h --long repo:,image:,tag:,cachedir:,registry:,writable-dirs,help -n $0 -- "$@")
-if [ $? != 0 ] ; then printHelp; exit 1; fi
+# Token can come from environment, second priority to set on command line
+if [ ! -z "${DOCKERHUB2OCI_TOKEN}" ]; then
+    echo "Found token in environment."
+    token=${DOCKERHUB2OCI_TOKEN}; 
+fi
+
+TEMP=$(getopt -o h --long repo:,image:,tag:,cachedir:,registry:,token:,writable-dirs,help -n $0 -- "$@")
+if [ $? != 0 ] ; then usage; exit 1; fi
 eval set -- "$TEMP"
 while true ; do
 	case "$1" in
@@ -106,6 +112,8 @@ fi
 
 reg_uri_manifest="https://${registry}/v2/${img_full}/manifests/${tag}"
 reg_uri_blobs="https://${registry}/v2/${img_full}/blobs"
+
+echo $reg_uri_manifest
 
 # Layers
 layers_raw=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" | jq -r .fsLayers[].blobSum)
