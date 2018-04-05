@@ -24,6 +24,9 @@ to a folder to be used as OCI image.
 
 Example usage:
 $0 --repo gliderlabs --image alpine --tag latest
+
+Nvidia Cloud:
+$0 --registry nvcr.io --repo tensorflow --image alpine --tag 17.10 --token $token
 EOF
 exit 1
 }
@@ -37,10 +40,21 @@ if [ ! -f "${HERE}/blob2oci" ]; then
     exit 1 
 fi
 
+# Aria2c
+
+if ! [ -x "$(command -v aria2c)" ]; then
+  echo '# Missing aria2c, install with:
+sudo apt-get install aria2
+sudo yum install aria2
+sudo pacman -Sy aria2' >&2
+  exit 1
+fi
+
 # Defaults
 
 registry="registry.hub.docker.com"
 repo="gliderlabs"
+token="unset"
 image="alpine"
 tag="latest"
 
@@ -58,6 +72,7 @@ while true ; do
 		--tag)           tag=$2;             shift 2;;
 		--cachedir)      cachedir=$2;        shift 2;;
 		--registry)      registry=$2;        shift 2;;
+		--token)         token=$2;           shift 2;;
 		--writable-dirs) writable_dirs=true; shift 1;;
 		-h|--help)       help;               exit 0;;
 		--)              shift;              break;;
@@ -73,16 +88,24 @@ mkdir -p ${imgroot}
 
 img_full="${repo}/${image}"
 
-auth_uri="https://auth.docker.io/token"
-auth_uri_full="${auth_uri}?service=registry.docker.io&scope=repository:${img_full}:pull"
+# If the token is unset, we use default auth_uri and auth_uri full. If a 
+#     different client is needed (e.g., Nvidia Cloud) this logic will be handled
+#     in a calling script, and then token passed forward
+
+if [ "${token}" == "unset" ]; then
+
+    auth_uri="https://auth.docker.io/token"
+    auth_uri_full="${auth_uri}?service=registry.docker.io&scope=repository:${img_full}:pull"
+
+    # If the user is logged in with Docker, this should return the Auth token?
+    token=$(curl -s ${auth_uri_full} | jq -r .token)
+
+    # grep -Po '"'"token"'"\s*:\s*"\K([^"]*)')
+    #echo $token
+fi
 
 reg_uri_manifest="https://${registry}/v2/${img_full}/manifests/${tag}"
 reg_uri_blobs="https://${registry}/v2/${img_full}/blobs"
-
-# Auth token
-token=$(curl -s ${auth_uri_full} | jq -r .token)
-# grep -Po '"'"token"'"\s*:\s*"\K([^"]*)')
-#echo $token
 
 # Layers
 layers_raw=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" | jq -r .fsLayers[].blobSum)
@@ -94,6 +117,10 @@ layers=$(echo ${layers_raw} | tr ' ' '\n' | tac | uniq)
 # download only fully unique layer IDs.
 layers_dl=$(echo ${layers_raw} | tr ' ' '\n' | sort | uniq)
 
+##############################################
+# Download
+##############################################
+
 for HASHLAYER in ${layers_dl}; do
 	hashtype=${HASHLAYER%:*}
 	layer=${HASHLAYER#*:}
@@ -103,9 +130,19 @@ for HASHLAYER in ${layers_dl}; do
 	echo "  out=${HASHLAYER}.tar.gz"
 done | aria2c -i - -d ${cachedir} --header="Authorization: Bearer ${token}" -V
 
+
+##############################################
+# Extract and Clean
+##############################################
+
 for HASHLAYER in ${layers}; do
 
-        # Call blob2oci to handle the layer
-        exec "${HERE}/blob2oci" --layer "$layer" --extract "${imgroot}" --writable-dirs ${writable_dirs}
+	layer="${cachedir}/${HASHLAYER}.tar.gz"
 
+        # Call blob2oci to handle the layer
+        if [ "${writable_dirs}" == true ]; then
+            exec "${HERE}/blob2oci" --layer "$layer" --extract "${imgroot}" --writable-dirs
+        else
+            exec "${HERE}/blob2oci" --layer "$layer" --extract "${imgroot}"
+        fi
 done
