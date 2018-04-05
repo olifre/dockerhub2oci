@@ -92,7 +92,7 @@ done
 
 img_full="${repo}/${image}"
 auth_uri="https://authn.nvidia.com/token"
-auth_uri_full="${auth_uri}?service=registry&scope=repository:${img_full}:pull"
+auth_uri_full="${auth_uri}?service=registry&expires_in=900&scope=repository:${img_full}:pull"
 
 # If nvidia is desired, a --token is required!
 if [ "${token}" == "unset" ]; then
@@ -101,12 +101,15 @@ if [ "${token}" == "unset" ]; then
 fi
 
 # The nvidia cloud token still needs to be converted to base64
-# This isn't working yet
 
-token="$(echo -n "\$oauthtoken:$token" | base64)"
-token=$(curl -s -H "Authorization: Basic ${token}" ${auth_uri_full} | jq -r .token)
+token="$(echo -n "\$oauthtoken:$token" | base64)" | tr -d " "
+token=$(curl -s -H "Authorization: Basic ${token}" -H "Content-Type: application/json; charset=utf-8" -H "Accept: application/json" ${auth_uri_full} | jq -r .token)
 echo $token
 
+# response I'm getting
+# {"timestamp":1522964755796,"status":401,"error":"Unauthorized","message":"Unauthorized","path":"/token"}
+
 echo "exec ${HERE}/dockerhub2oci --token ${token} $cmd"
+
 # Then call dockerhub2oci
 #exec "${HERE}/dockerhub2oci" --token ${token} $cmd
