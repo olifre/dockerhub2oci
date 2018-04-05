@@ -1,0 +1,112 @@
+#!/bin/bash
+
+#
+# ngc2oci - Simple shell tool to pull from Nvidia Cloud and create an OCI image.
+# Copyright (C) 2018  Vanessa Sochat
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+function help() {
+cat <<EOF
+Tool to pull an image from an Nvidia Cloud registry and extract the contents
+to a folder to be used as OCI image.
+
+Example usage:
+$0 --repo tensorflow --image tensorflow --tag 17.10 --token $token
+EOF
+exit 1
+}
+
+# Ensure functions available
+
+HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+if [ ! -f "${HERE}/dockerhub2oci" ]; then
+    echo "Cannot find dockerhub2oci, exiting."
+    exit 1
+fi
+
+# Defaults
+
+registry="nvcr.io"
+repo="nvidia"
+token="unset"
+image="tensorflow"
+tag="17.10"
+
+cachedir=${TMPDIR:-/tmp}/ngc2oci/
+
+writable_dirs=false
+cmd="--registry nvcr.io"
+
+TEMP=$(getopt -o h --long repo:,image:,tag:,token:,cachedir:,writable-dirs,help -n $0 -- "$@")
+if [ $? != 0 ] ; then printHelp; exit 1; fi
+eval set -- "$TEMP"
+while true ; do
+	case "$1" in
+		--repo)          
+                      repo=$2;            
+                      shift 2;
+                      cmd="$cmd --repo $repo";
+                ;;
+		--image)         
+                      image=$2;           
+                      shift 2;
+                      cmd="$cmd --image $image";
+                ;;
+		--tag)           
+                      tag=$2;             
+                      shift 2;
+                      cmd="$cmd --tag $tag";
+                ;;
+		--cachedir)      
+                      cachedir=$2;
+                      shift 2;
+                      cmd="$cmd --cachedir $cachedir";
+                ;;
+		--token)         
+                      token=$2;           
+                      shift 2;
+                ;;
+		--writable-dirs) 
+                      writable_dirs=true;
+                      shift 1;
+                      cmd="$cmd --writable_dirs";
+                ;;
+		-h|--help)       help;               exit 0;;
+		--)              shift;              break;;
+		*) echo "Internal error!";           exit 1;;
+	esac
+done
+
+img_full="${repo}/${image}"
+auth_uri="https://authn.nvidia.com/token"
+auth_uri_full="${auth_uri}?service=registry&scope=repository:${img_full}:pull"
+
+# If nvidia is desired, a --token is required!
+if [ "${token}" == "unset" ]; then
+    echo "You must provide an Nvidia Cloud token with --token"
+    exit 1
+fi
+
+# The nvidia cloud token still needs to be converted to base64
+# This isn't working yet
+
+token="$(echo -n "\$oauthtoken:$token" | base64)"
+token=$(curl -s -H "Authorization: Basic ${token}" ${auth_uri_full} | jq -r .token)
+echo $token
+
+echo "exec ${HERE}/dockerhub2oci --token ${token} $cmd"
+# Then call dockerhub2oci
+#exec "${HERE}/dockerhub2oci" --token ${token} $cmd
