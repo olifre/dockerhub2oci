@@ -25,8 +25,14 @@ to a folder to be used as OCI image.
 Example usage:
 $0 --repo gliderlabs --image alpine --tag latest
 
-Nvidia Cloud:
-$0 --registry nvcr.io --repo tensorflow --image alpine --tag 17.10 --token $token
+Options:
+
+--strip-headers: (false) if true, use token for first request and don't forward
+--writable-dirs: (false) if true, make directories writable in blob2oci
+--registry: Docker Hub registry (default registry.hub.docker.com)
+--repo: registry repository (default gliderlabs)
+--image: image name (default alpine)
+--tag: image tag (default latest)
 EOF
 exit 1
 }
@@ -46,7 +52,8 @@ if ! [ -x "$(command -v aria2c)" ]; then
   echo '# Missing aria2c, install with:
 sudo apt-get install aria2
 sudo yum install aria2
-sudo pacman -Sy aria2' >&2
+sudo pacman -Sy aria2
+sudo emerge -av aria2' >&2
   exit 1
 fi
 
@@ -58,8 +65,9 @@ token="unset"
 image="alpine"
 tag="latest"
 
-cachedir=${TMPDIR:-/tmp}/docker2oci/
+cachedir=${TMPDIR:-/tmp}/docker2oci
 
+strip_headers=false
 writable_dirs=false
 
 # Token can come from environment, second priority to set on command line
@@ -68,7 +76,7 @@ if [ ! -z "${DOCKERHUB2OCI_TOKEN}" ]; then
     token=${DOCKERHUB2OCI_TOKEN}; 
 fi
 
-TEMP=$(getopt -o h --long repo:,image:,tag:,cachedir:,registry:,token:,writable-dirs,help -n $0 -- "$@")
+TEMP=$(getopt -o h --long repo:,image:,tag:,cachedir:,registry:,token:,writable-dirs,strip-headers,help -n $0 -- "$@")
 if [ $? != 0 ] ; then usage; exit 1; fi
 eval set -- "$TEMP"
 while true ; do
@@ -80,6 +88,7 @@ while true ; do
 		--registry)      registry=$2;        shift 2;;
 		--token)         token=$2;           shift 2;;
 		--writable-dirs) writable_dirs=true; shift 1;;
+		--strip-headers) strip_headers=true; shift 1;;
 		-h|--help)       help;               exit 0;;
 		--)              shift;              break;;
 		*) echo "Internal error!";           exit 1;;
@@ -113,8 +122,6 @@ fi
 reg_uri_manifest="https://${registry}/v2/${img_full}/manifests/${tag}"
 reg_uri_blobs="https://${registry}/v2/${img_full}/blobs"
 
-echo $reg_uri_manifest
-
 # Layers
 layers_raw=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" | jq -r .fsLayers[].blobSum)
 # grep -Po '"'"blobSum"'"\s*:\s*"\K([^"]*)')
@@ -125,19 +132,43 @@ layers=$(echo ${layers_raw} | tr ' ' '\n' | tac | uniq)
 # download only fully unique layer IDs.
 layers_dl=$(echo ${layers_raw} | tr ' ' '\n' | sort | uniq)
 
+
 ##############################################
 # Download
 ##############################################
 
-for HASHLAYER in ${layers_dl}; do
-	hashtype=${HASHLAYER%:*}
-	layer=${HASHLAYER#*:}
-	hashtype_aria=$(echo ${hashtype} | sed 's/^\([a-z]*\)\([0-9]*\)$/\1-\2/')
-	echo ${reg_uri_blobs}/${HASHLAYER}
-	echo "  checksum=${hashtype_aria}=${layer}"
-	echo "  out=${HASHLAYER}.tar.gz"
-done | aria2c -i - -d ${cachedir} --header="Authorization: Bearer ${token}" -V
+# The aria2c command that doesn't strip headers is given Auth header directly
 
+echo "Collecting download links..."
+
+if [ "${strip_headers}" == true ]; then
+
+    # Only pass token to first request, use response with aria (without auth)
+    for HASHLAYER in ${layers_dl}; do
+        hashtype=${HASHLAYER%:*}
+        layer=${HASHLAYER#*:}
+        hashtype_aria=$(echo ${hashtype} | sed 's/^\([a-z]*\)\([0-9]*\)$/\1-\2/')
+
+        # Decide on the final uri (with or without Auth, and
+ 	hashlayer_final_uri=${reg_uri_blobs}/${HASHLAYER}
+        hashlayer_final_uri=$(curl -H "Authorization: Bearer ${token}" -Ls -o /dev/null -w %{url_effective} --max-filesize 1024 ${reg_uri_blobs}/${HASHLAYER})
+        echo ${hashlayer_final_uri}
+        echo "  checksum=${hashtype_aria}=${layer}"
+        echo "  out=${HASHLAYER}.tar.gz"
+    done |  aria2c -i - -d ${cachedir} -V
+        
+else
+
+    # Pass Auth header to aria2c and thus all following requests
+    for HASHLAYER in ${layers_dl}; do
+ 	hashtype=${HASHLAYER%:*}
+ 	layer=${HASHLAYER#*:}
+ 	hashtype_aria=$(echo ${hashtype} | sed 's/^\([a-z]*\)\([0-9]*\)$/\1-\2/')
+ 	echo ${reg_uri_blobs}/${HASHLAYER}
+ 	echo "  checksum=${hashtype_aria}=${layer}"
+ 	echo "  out=${HASHLAYER}.tar.gz"
+    done | aria2c -i - -d ${cachedir} --header="Authorization: Bearer ${token}" -V
+fi
 
 ##############################################
 # Extract and Clean
