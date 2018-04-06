@@ -46,7 +46,7 @@ image="tensorflow"
 tag="17.10"
 cmd=""
 
-cachedir=${TMPDIR:-/tmp}/ngc2oci/
+cachedir=${TMPDIR:-/tmp}/ngc2oci
 
 writable_dirs=false
 
@@ -88,7 +88,7 @@ while true ; do
 done
 
 # Put command together to pass on to dockerhub2oci
-cmd="--registry nvcr.io $cmd --repo $repo --image $image --tag $tag";
+cmd="--registry nvcr.io $cmd --repo $repo --image $image --tag $tag --strip-headers";
 
 img_full="${repo}/${image}"
 auth_uri="https://authn.nvidia.com/token"
