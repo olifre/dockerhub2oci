@@ -150,7 +150,7 @@ if [ "${strip_headers}" == true ]; then
         hashtype_aria=$(echo ${hashtype} | sed 's/^\([a-z]*\)\([0-9]*\)$/\1-\2/')
 
         # Decide on the final uri (with or without Auth, and
- 	hashlayer_final_uri=${reg_uri_blobs}/${HASHLAYER}
+        hashlayer_final_uri=${reg_uri_blobs}/${HASHLAYER}
         hashlayer_final_uri=$(curl -H "Authorization: Bearer ${token}" -Ls -o /dev/null -w %{url_effective} --max-filesize 1024 ${reg_uri_blobs}/${HASHLAYER})
         echo ${hashlayer_final_uri}
         echo "  checksum=${hashtype_aria}=${layer}"
