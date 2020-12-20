@@ -77,7 +77,8 @@ if [ ! -z "${DOCKERHUB2OCI_TOKEN}" ]; then
 fi
 
 TEMP=$(getopt -o h --long repo:,image:,tag:,cachedir:,registry:,token:,writable-dirs,strip-headers,help -n $0 -- "$@")
-if [ $? != 0 ] ; then usage; exit 1; fi
+if [ $? != 0 ] ; then help; exit 1; fi
+
 eval set -- "$TEMP"
 while true ; do
 	case "$1" in
