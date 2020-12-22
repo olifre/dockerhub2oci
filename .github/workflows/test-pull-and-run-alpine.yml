@@ -1,0 +1,40 @@
+name: Test pull and run Alpine
+
+# Controls when the action will run. 
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  pull-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get -y install aria2 curl jq
+
+      - name: Test pulling Alpine container
+        run: |
+          echo "Starting pulling container..."
+          ./dockerhub2oci --repo gliderlabs --image alpine --tag latest
+          echo "Result:"
+          ls -la gliderlabs/alpine/latest
+
+      - name: Install Charliecloud for testing
+        run: |
+          sudo apt-get -y install charliecloud
+
+      - name: Test alpine container with Charliecloud
+        run: |
+          echo "Creating empty resolv.conf in container..."
+          touch gliderlabs/alpine/latest/etc/resolv.conf
+          echo "Running ls -la in container..."
+          ch-run -v gliderlabs/alpine/latest -- ls -la
+          echo "Checkout /etc/alpine-release in container..."
+          ch-run -v gliderlabs/alpine/latest -- cat /etc/alpine-release
