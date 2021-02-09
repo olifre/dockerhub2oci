@@ -180,8 +180,8 @@ for HASHLAYER in ${layers}; do
 
         # Call blob2oci to handle the layer
         if [ "${writable_dirs}" == true ]; then
-            exec "${HERE}/blob2oci" --layer "$layer" --extract "${imgroot}" --writable-dirs
+            "${HERE}/blob2oci" --layer "$layer" --extract "${imgroot}" --writable-dirs
         else
-            exec "${HERE}/blob2oci" --layer "$layer" --extract "${imgroot}"
+            "${HERE}/blob2oci" --layer "$layer" --extract "${imgroot}"
         fi
 done
