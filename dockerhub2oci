@@ -123,7 +123,16 @@ reg_uri_manifest="https://${registry}/v2/${img_full}/manifests/${tag}"
 reg_uri_blobs="https://${registry}/v2/${img_full}/blobs"
 
 # Layers
-layers_raw=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" | jq -r .fsLayers[].blobSum)
+# Try classic docker-style manifest first.
+layers_raw=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" | jq -r .fsLayers[].blobSum 2>/dev/null)
+if [ ! $? -eq 0 ]; then
+    # Retry assuming OCI manifest.
+    layers_raw=$(curl -s -H "Authorization: Bearer ${token}" "${reg_uri_manifest}" -H "Accept: application/vnd.oci.image.manifest.v1+json"| jq -r .layers[].digest)
+    if [ ! $? -eq 0 ]; then
+      echo "Error fetching layers!"
+      exit 1
+    fi
+fi
 # grep -Po '"'"blobSum"'"\s*:\s*"\K([^"]*)')
 #echo "$reply"
 
