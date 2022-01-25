@@ -112,6 +112,11 @@ if [ "${token}" == "unset" ]; then
     auth_uri="https://auth.docker.io/token"
     auth_uri_full="${auth_uri}?service=registry.docker.io&scope=repository:${img_full}:pull"
 
+    if [ "${registry}" = "ghcr.io" ]; then
+        auth_uri="https://ghcr.io/token"
+        auth_uri_full="${auth_uri}?service=ghcr.io&expires_in=900&scope=repository:${img_full}:pull"
+    fi
+
     # If the user is logged in with Docker, this should return the Auth token?
     token=$(curl -s ${auth_uri_full} | jq -r .token)
 
