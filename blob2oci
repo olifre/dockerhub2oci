@@ -28,7 +28,7 @@ function handle_whiteouts() {
     # Layer and extract folder required
 
     if [ "$#" -ne 2 ]; then
-        help;
+        printHelp;
         exit 1;
     fi
 
@@ -119,7 +119,7 @@ function handle_whiteouts() {
 
 function run_handle_whiteouts() {
 
-    function help() {
+    function printHelp() {
     cat <<EOF
 Tool to extract a layer to a folder of interest, handling whiteout files.
 
@@ -133,7 +133,7 @@ exit 1
 
     # Argument Parsing
 
-    TEMP=$(getopt -o h --long layer:,extract:,help -n $0 -- "$@")
+    TEMP=$(getopt -o h --long layer:,extract:,writable-dirs,help -n $0 -- "$@")
     if [ $? != 0 ] ; then printHelp; exit 1; fi
     eval set -- "$TEMP"
     while true ; do
@@ -141,7 +141,7 @@ exit 1
             --layer)         layer=$2;           shift 2;;
             --extract)       extract=$2;         shift 2;;
             --writable-dirs) writable_dirs=true; shift 1;;
-            -h|--help)       help;               exit 0;;
+            -h|--help)       printHelp;          exit 0;;
             --)              shift;              break;;
             *) echo "Internal error!";           exit 1;;
         esac
