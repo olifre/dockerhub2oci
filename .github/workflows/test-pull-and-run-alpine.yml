@@ -30,6 +30,10 @@ jobs:
           echo "Result:"
           ls -la gliderlabs/alpine/latest
 
+      - name: Install containerd due to Ubuntu Jammy messy dependencies
+        run: |
+          sudo apt-get -y install containerd
+
       - name: Install Charliecloud for testing
         run: |
           sudo apt-get -y install charliecloud
